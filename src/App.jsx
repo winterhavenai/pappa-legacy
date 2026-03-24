@@ -132,18 +132,19 @@ function generateSessionId() {
 
 // ─── MAIN APP ──────────────────────────────────────────────
 export default function LegacyApp() {
-  const [screen, setScreen] = useState("welcome");
-  const [chapterIdx, setChapterIdx] = useState(0);
-  const [questionIdx, setQuestionIdx] = useState(0);
-  const [answers, setAnswers] = useState({});
+  // ── All state seeded from localStorage ──
+  const [screen, setScreen] = useState(() => localStorage.getItem("pappa_screen") || "welcome");
+  const [chapterIdx, setChapterIdx] = useState(() => Number(localStorage.getItem("pappa_chapterIdx") || 0));
+  const [questionIdx, setQuestionIdx] = useState(() => Number(localStorage.getItem("pappa_questionIdx") || 0));
+  const [answers, setAnswers] = useState(() => JSON.parse(localStorage.getItem("pappa_answers") || "{}"));
   const [inputText, setInputText] = useState("");
   const [aiReply, setAiReply] = useState("");
   const [loading, setLoading] = useState(false);
   const [showReply, setShowReply] = useState(false);
-  const [history, setHistory] = useState([]);
-  const [covenant, setCovenant] = useState("");
+  const [history, setHistory] = useState(() => JSON.parse(localStorage.getItem("pappa_history") || "[]"));
+  const [covenant, setCovenant] = useState(() => localStorage.getItem("pappa_covenant") || "");
   const [buildingCovenant, setBuildingCovenant] = useState(false);
-  const [consentGiven, setConsentGiven] = useState(false);
+  const [consentGiven, setConsentGiven] = useState(() => localStorage.getItem("pappa_consent") === "true");
   const [sessionId] = useState(generateSessionId);
   const replyRef = useRef(null);
   const textareaRef = useRef(null);
@@ -153,11 +154,23 @@ export default function LegacyApp() {
   const totalAnswered = Object.keys(answers).length;
   const totalQuestions = CHAPTERS.reduce((a, c) => a + c.questions.length, 0);
 
+  // ── Scroll to AI reply when it appears ──
   useEffect(() => {
     if (showReply && replyRef.current) {
       setTimeout(() => replyRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 100);
     }
   }, [showReply]);
+
+  // ── Persist all state to localStorage whenever it changes ──
+  useEffect(() => {
+    localStorage.setItem("pappa_screen", screen);
+    localStorage.setItem("pappa_chapterIdx", chapterIdx);
+    localStorage.setItem("pappa_questionIdx", questionIdx);
+    localStorage.setItem("pappa_answers", JSON.stringify(answers));
+    localStorage.setItem("pappa_history", JSON.stringify(history));
+    localStorage.setItem("pappa_covenant", covenant);
+    localStorage.setItem("pappa_consent", consentGiven);
+  }, [screen, chapterIdx, questionIdx, answers, history, covenant, consentGiven]);
 
   // ── Collect anonymous engagement data ──
   const collectData = async (chId, qIdx, qText, answerLen) => {
