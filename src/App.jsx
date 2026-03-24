@@ -125,14 +125,12 @@ Always end with a single, gentle, optional invitation to say more — never a de
 
 This man's words are a gift to ten grandchildren who will read them long after he is gone. Treat every answer accordingly.`;
 
-// Generate a random anonymous session ID
 function generateSessionId() {
   return "s_" + Math.random().toString(36).substring(2, 15);
 }
 
 // ─── MAIN APP ──────────────────────────────────────────────
 export default function LegacyApp() {
-  // ── All state seeded from localStorage ──
   const [screen, setScreen] = useState(() => localStorage.getItem("pappa_screen") || "welcome");
   const [chapterIdx, setChapterIdx] = useState(() => Number(localStorage.getItem("pappa_chapterIdx") || 0));
   const [questionIdx, setQuestionIdx] = useState(() => Number(localStorage.getItem("pappa_questionIdx") || 0));
@@ -153,15 +151,14 @@ export default function LegacyApp() {
   const question = chapter?.questions[questionIdx];
   const totalAnswered = Object.keys(answers).length;
   const totalQuestions = CHAPTERS.reduce((a, c) => a + c.questions.length, 0);
+  const hasAnyAnswers = totalAnswered > 0;
 
-  // ── Scroll to AI reply when it appears ──
   useEffect(() => {
     if (showReply && replyRef.current) {
       setTimeout(() => replyRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 100);
     }
   }, [showReply]);
 
-  // ── Persist all state to localStorage whenever it changes ──
   useEffect(() => {
     localStorage.setItem("pappa_screen", screen);
     localStorage.setItem("pappa_chapterIdx", chapterIdx);
@@ -172,7 +169,6 @@ export default function LegacyApp() {
     localStorage.setItem("pappa_consent", consentGiven);
   }, [screen, chapterIdx, questionIdx, answers, history, covenant, consentGiven]);
 
-  // ── Collect anonymous engagement data ──
   const collectData = async (chId, qIdx, qText, answerLen) => {
     if (!consentGiven) return;
     try {
@@ -189,7 +185,7 @@ export default function LegacyApp() {
         }),
       });
     } catch {
-      // Silent fail — never interrupt the user experience
+      // Silent fail
     }
   };
 
@@ -201,10 +197,7 @@ export default function LegacyApp() {
     setInputText("");
     setLoading(true);
     setShowReply(false);
-
-    // Collect anonymized engagement data (answer length only, never content)
     await collectData(chapter.id, questionIdx, question, ans.length);
-
     try {
       const msgs = [
         ...history,
@@ -257,7 +250,6 @@ export default function LegacyApp() {
         return ans ? `[${ch.title}]\nQ: ${q}\nA: ${ans}` : null;
       }).filter(Boolean)
     ).join("\n\n");
-
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -274,6 +266,131 @@ export default function LegacyApp() {
     }
     setBuildingCovenant(false);
   };
+
+  // ── REVIEW SCREEN ─────────────────────────────────────
+  if (screen === "review") {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        background: `radial-gradient(ellipse at 30% 20%, #2A4A6B 0%, ${C.navyDeep} 60%, #080F1A 100%)`,
+        fontFamily: "Georgia, 'Times New Roman', serif",
+        paddingBottom: 60,
+      }}>
+        {/* Header */}
+        <div style={{
+          background: "rgba(0,0,0,0.3)",
+          borderBottom: `1px solid rgba(212,160,23,0.2)`,
+          padding: "20px 24px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          position: "sticky", top: 0, zIndex: 100,
+        }}>
+          <button
+            onClick={() => setScreen("welcome")}
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              border: "1px solid rgba(255,255,255,0.2)",
+              color: C.cream, fontSize: 17, fontFamily: "Georgia, serif",
+              padding: "10px 20px", borderRadius: 10, cursor: "pointer",
+            }}
+          >
+            ← Back
+          </button>
+          <div style={{ color: C.goldWarm, fontSize: 15, letterSpacing: 2, textTransform: "uppercase" }}>
+            My Answers
+          </div>
+          <div style={{ color: C.warmGray, fontSize: 15 }}>
+            {totalAnswered} of {totalQuestions}
+          </div>
+        </div>
+
+        <div style={{ maxWidth: 680, margin: "0 auto", padding: "32px 20px" }}>
+
+          <div style={{ textAlign: "center", marginBottom: 40 }}>
+            <div style={{ fontSize: 36, marginBottom: 10 }}>✦</div>
+            <h2 style={{ fontSize: 30, color: C.cream, fontWeight: "normal", margin: "0 0 8px" }}>
+              Your Words, Pappa
+            </h2>
+            <p style={{ color: "#A8C4DC", fontSize: 16, fontStyle: "italic", margin: 0 }}>
+              Every answer below is saved and will become part of your Legacy Covenant.
+            </p>
+          </div>
+
+          {CHAPTERS.map((ch) => {
+            const chapterAnswers = ch.questions.map((q, i) => ({
+              question: q,
+              answer: answers[`${ch.id}_${i}`] || null,
+            }));
+            const answeredCount = chapterAnswers.filter(a => a.answer).length;
+            if (answeredCount === 0) return null;
+
+            const isAleda = ch.id === "aleda";
+            const accentColor = isAleda ? C.aleda : C.navy;
+            const borderColor = isAleda ? "rgba(92,58,107,0.4)" : "rgba(27,58,92,0.3)";
+
+            return (
+              <div key={ch.id} style={{ marginBottom: 36 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: "50%",
+                    background: accentColor,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 18, color: C.goldPale, flexShrink: 0,
+                  }}>
+                    {ch.icon}
+                  </div>
+                  <div>
+                    <div style={{ color: C.cream, fontSize: 20 }}>{ch.title}</div>
+                    <div style={{ color: C.warmGray, fontSize: 14 }}>
+                      {answeredCount} of {ch.questions.length} answered
+                    </div>
+                  </div>
+                </div>
+
+                {chapterAnswers.map(({ question, answer }, i) => {
+                  if (!answer) return null;
+                  return (
+                    <div key={i} style={{
+                      background: "rgba(255,255,255,0.06)",
+                      border: `1px solid ${borderColor}`,
+                      borderRadius: 14, padding: "22px 24px",
+                      marginBottom: 14,
+                    }}>
+                      <p style={{
+                        fontSize: 15, color: "#A8C4DC",
+                        fontStyle: "italic", margin: "0 0 12px",
+                        lineHeight: 1.6,
+                        borderBottom: `1px solid rgba(255,255,255,0.08)`,
+                        paddingBottom: 12,
+                      }}>
+                        {question}
+                      </p>
+                      <p style={{ fontSize: 18, color: C.cream, lineHeight: 1.75, margin: 0 }}>
+                        {answer}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+
+          <button
+            onClick={() => setScreen("interview")}
+            style={{
+              width: "100%", padding: "22px",
+              fontSize: 22, fontFamily: "Georgia, serif",
+              background: `linear-gradient(135deg, ${C.gold}, ${C.goldWarm})`,
+              color: C.white, border: "none", borderRadius: 14,
+              cursor: "pointer", marginTop: 12,
+              boxShadow: `0 8px 32px rgba(184,134,11,0.4)`,
+            }}
+          >
+            Continue My Interview →
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // ── WELCOME ────────────────────────────────────────────
   if (screen === "welcome") {
@@ -347,6 +464,7 @@ export default function LegacyApp() {
             </label>
           </div>
 
+          {/* Primary CTA — label changes if answers exist */}
           <button
             onClick={() => setScreen("interview")}
             style={{
@@ -356,10 +474,29 @@ export default function LegacyApp() {
               color: C.white, border: "none", borderRadius: 14,
               cursor: "pointer", letterSpacing: 0.5,
               boxShadow: `0 8px 32px rgba(184,134,11,0.4)`,
+              marginBottom: hasAnyAnswers ? 14 : 0,
             }}
           >
-            I'm Ready — Let's Begin →
+            {hasAnyAnswers ? "Continue My Interview →" : "I'm Ready — Let's Begin →"}
           </button>
+
+          {/* Review answers — only visible when answers exist */}
+          {hasAnyAnswers && (
+            <button
+              onClick={() => setScreen("review")}
+              style={{
+                width: "100%", padding: "18px 32px",
+                fontSize: 20, fontFamily: "Georgia, serif",
+                background: "transparent",
+                color: C.goldWarm,
+                border: `2px solid rgba(212,160,23,0.4)`,
+                borderRadius: 14, cursor: "pointer",
+              }}
+            >
+              ✦ Review My Answers ({totalAnswered} saved)
+            </button>
+          )}
+
           <p style={{ color: C.warmGray, fontSize: 15, marginTop: 16, fontStyle: "italic" }}>
             Take your time. There is no rush. Your words matter.
           </p>
@@ -408,6 +545,20 @@ export default function LegacyApp() {
               );
             })}
           </div>
+
+          {/* Review on complete screen */}
+          <button
+            onClick={() => setScreen("review")}
+            style={{
+              width: "100%", padding: "16px 32px",
+              fontSize: 19, fontFamily: "Georgia, serif",
+              background: "transparent", color: C.goldWarm,
+              border: `2px solid rgba(212,160,23,0.4)`,
+              borderRadius: 14, cursor: "pointer", marginBottom: 24,
+            }}
+          >
+            ✦ Review All My Answers
+          </button>
 
           {!covenant && !buildingCovenant && (
             <div style={{
@@ -523,9 +674,20 @@ export default function LegacyApp() {
             );
           })}
         </div>
-        <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 15, fontStyle: "italic" }}>
-          Pappa's Legacy
-        </div>
+        {/* My Answers button in top bar */}
+        {hasAnyAnswers && (
+          <button
+            onClick={() => setScreen("review")}
+            style={{
+              background: "rgba(255,255,255,0.12)",
+              border: "1px solid rgba(255,255,255,0.25)",
+              color: C.goldPale, fontSize: 14, fontFamily: "Georgia, serif",
+              padding: "7px 14px", borderRadius: 8, cursor: "pointer",
+            }}
+          >
+            My Answers
+          </button>
+        )}
       </div>
 
       {/* Progress bar */}
