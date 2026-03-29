@@ -163,7 +163,8 @@ export default function LegacyApp() {
     localStorage.setItem("pappa_screen", screen);
     localStorage.setItem("pappa_chapterIdx", chapterIdx);
     localStorage.setItem("pappa_questionIdx", questionIdx);
-    localStorage.setItem("pappa_answers", JSON.stringify(answers));
+    const existingAnswers = JSON.parse(localStorage.getItem("pappa_answers") || "{}");
+    localStorage.setItem("pappa_answers", JSON.stringify({...existingAnswers, ...answers}));
     localStorage.setItem("pappa_history", JSON.stringify(history));
     localStorage.setItem("pappa_covenant", covenant);
     localStorage.setItem("pappa_consent", consentGiven);
