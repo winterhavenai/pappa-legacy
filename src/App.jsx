@@ -159,6 +159,7 @@ export default function LegacyApp() {
   const [sessionId] = useState(generateSessionId);
   const replyRef = useRef(null);
   const textareaRef = useRef(null);
+  const draftTimerRef = useRef(null);
 
   const chapter = CHAPTERS[chapterIdx];
   const question = chapter?.questions[questionIdx];
@@ -182,6 +183,54 @@ export default function LegacyApp() {
     localStorage.setItem("pappa_covenant", covenant);
     localStorage.setItem("pappa_consent", consentGiven);
   }, [screen, chapterIdx, questionIdx, answers, history, covenant, consentGiven]);
+
+  // ── AUTOSAVE: debounce inputText to localStorage draft ──
+  useEffect(() => {
+    if (!chapter) return;
+    const draftKey = `pappa_draft_${chapter.id}_${questionIdx}`;
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    if (inputText.trim()) {
+      draftTimerRef.current = setTimeout(() => {
+        localStorage.setItem(draftKey, inputText);
+      }, 2000);
+    }
+    return () => { if (draftTimerRef.current) clearTimeout(draftTimerRef.current); };
+  }, [inputText, chapter, questionIdx]);
+
+  // ── RESTORE DRAFT on chapter/question change ──
+  useEffect(() => {
+    if (!chapter) return;
+    const draftKey = `pappa_draft_${chapter.id}_${questionIdx}`;
+    const saved = localStorage.getItem(draftKey);
+    if (saved) {
+      setInputText(saved);
+    } else {
+      setInputText("");
+    }
+  }, [chapterIdx, questionIdx]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── BEFOREUNLOAD guard when inputText has content ──
+  useEffect(() => {
+    const handler = (e) => {
+      if (inputText.trim()) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [inputText]);
+
+  // Navigation guard helper
+  const confirmIfUnsaved = (action) => {
+    if (inputText.trim()) {
+      const ok = window.confirm(
+        "You have typed an answer that hasn't been submitted yet. Are you sure you want to leave this question? Your draft will be saved automatically."
+      );
+      if (!ok) return;
+    }
+    action();
+  };
 
   const collectData = async (chId, qIdx, qText, answerLen) => {
     if (!consentGiven) return;
@@ -207,8 +256,10 @@ export default function LegacyApp() {
     if (!inputText.trim()) return;
     const ans = inputText.trim();
     const key = `${chapter.id}_${questionIdx}`;
+    const draftKey = `pappa_draft_${chapter.id}_${questionIdx}`;
     setAnswers(p => ({ ...p, [key]: ans }));
     setInputText("");
+    localStorage.removeItem(draftKey);
     setLoading(true);
     setShowReply(false);
     await collectData(chapter.id, questionIdx, question, ans.length);
@@ -683,7 +734,7 @@ export default function LegacyApp() {
                   transition: "all 0.4s ease",
                   cursor: done ? "pointer" : "default",
                 }}
-                onClick={() => done && (setChapterIdx(i), setQuestionIdx(0), setShowReply(false))}
+                onClick={() => done && confirmIfUnsaved(() => { setChapterIdx(i); setQuestionIdx(0); setShowReply(false); })}
               />
             );
           })}
@@ -691,7 +742,7 @@ export default function LegacyApp() {
         {/* My Answers button in top bar */}
         {hasAnyAnswers && (
           <button
-            onClick={() => setScreen("review")}
+            onClick={() => confirmIfUnsaved(() => setScreen("review"))}
             style={{
               background: "rgba(255,255,255,0.12)",
               border: "1px solid rgba(255,255,255,0.25)",
