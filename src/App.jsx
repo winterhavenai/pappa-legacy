@@ -129,12 +129,25 @@ function generateSessionId() {
   return "s_" + Math.random().toString(36).substring(2, 15);
 }
 
+// Derive resume position from saved answers — finds the first unanswered question
+function getResumePosition(savedAnswers) {
+  for (let c = 0; c < CHAPTERS.length; c++) {
+    for (let q = 0; q < CHAPTERS[c].questions.length; q++) {
+      if (!savedAnswers[`${CHAPTERS[c].id}_${q}`]) {
+        return { chapterIdx: c, questionIdx: q };
+      }
+    }
+  }
+  return { chapterIdx: CHAPTERS.length - 1, questionIdx: CHAPTERS[CHAPTERS.length - 1].questions.length - 1 };
+}
+
 // ─── MAIN APP ──────────────────────────────────────────────
 export default function LegacyApp() {
-  const [screen, setScreen] = useState(() => localStorage.getItem("pappa_screen") || "welcome");
-  const [chapterIdx, setChapterIdx] = useState(() => Number(localStorage.getItem("pappa_chapterIdx") || 0));
-  const [questionIdx, setQuestionIdx] = useState(() => Number(localStorage.getItem("pappa_questionIdx") || 0));
   const [answers, setAnswers] = useState(() => JSON.parse(localStorage.getItem("pappa_answers") || "{}"));
+  const resumePos = getResumePosition(JSON.parse(localStorage.getItem("pappa_answers") || "{}"));
+  const [screen, setScreen] = useState(() => localStorage.getItem("pappa_screen") || "welcome");
+  const [chapterIdx, setChapterIdx] = useState(() => resumePos.chapterIdx);
+  const [questionIdx, setQuestionIdx] = useState(() => resumePos.questionIdx);
   const [inputText, setInputText] = useState("");
   const [aiReply, setAiReply] = useState("");
   const [loading, setLoading] = useState(false);
