@@ -141,6 +141,44 @@ function getResumePosition(savedAnswers) {
   return { chapterIdx: CHAPTERS.length - 1, questionIdx: CHAPTERS[CHAPTERS.length - 1].questions.length - 1 };
 }
 
+// ─── REDIS BACKUP HELPERS ──────────────────────────────────
+function getSessionId() {
+  let id = localStorage.getItem("pappa_session_id");
+  if (!id) {
+    id = "pappa_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+    localStorage.setItem("pappa_session_id", id);
+  }
+  return id;
+}
+
+async function backupToRedis(chapterId, questionIndex, answer) {
+  try {
+    await fetch("/api/save-answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: getSessionId(),
+        chapterId,
+        questionIndex,
+        answer,
+        timestamp: new Date().toISOString(),
+      }),
+    });
+  } catch {
+    // Silent fail — localStorage is primary, Redis is backup
+  }
+}
+
+async function recoverFromRedis() {
+  try {
+    const res = await fetch(`/api/get-answers?sessionId=${getSessionId()}`);
+    const data = await res.json();
+    return data.answers || {};
+  } catch {
+    return {};
+  }
+}
+
 // ─── MAIN APP ──────────────────────────────────────────────
 export default function LegacyApp() {
   const [answers, setAnswers] = useState(() => JSON.parse(localStorage.getItem("pappa_answers") || "{}"));
@@ -167,6 +205,26 @@ export default function LegacyApp() {
   const totalQuestions = CHAPTERS.reduce((a, c) => a + c.questions.length, 0);
   const hasAnyAnswers = totalAnswered > 0;
 
+  // ── REDIS RECOVERY: on load, check server for answers not in localStorage ──
+  useEffect(() => {
+    recoverFromRedis().then(serverAnswers => {
+      if (serverAnswers && Object.keys(serverAnswers).length > 0) {
+        const local = JSON.parse(localStorage.getItem("pappa_answers") || "{}");
+        let recovered = 0;
+        for (const [key, value] of Object.entries(serverAnswers)) {
+          if (!local[key] && value) {
+            local[key] = value;
+            recovered++;
+          }
+        }
+        if (recovered > 0) {
+          localStorage.setItem("pappa_answers", JSON.stringify(local));
+          setAnswers(local);
+        }
+      }
+    });
+  }, []);
+
   useEffect(() => {
     if (showReply && replyRef.current) {
       setTimeout(() => replyRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 100);
@@ -178,10 +236,21 @@ export default function LegacyApp() {
     localStorage.setItem("pappa_chapterIdx", chapterIdx);
     localStorage.setItem("pappa_questionIdx", questionIdx);
     const existingAnswers = JSON.parse(localStorage.getItem("pappa_answers") || "{}");
-    localStorage.setItem("pappa_answers", JSON.stringify({...existingAnswers, ...answers}));
+    const merged = {...existingAnswers, ...answers};
+    localStorage.setItem("pappa_answers", JSON.stringify(merged));
     localStorage.setItem("pappa_history", JSON.stringify(history));
     localStorage.setItem("pappa_covenant", covenant);
     localStorage.setItem("pappa_consent", consentGiven);
+
+    // ── REDIS BACKUP: after localStorage save, backup new answers to server ──
+    for (const [key, value] of Object.entries(answers)) {
+      if (value && value.trim()) {
+        const parts = key.split("_");
+        const chapterId = parts.slice(0, -1).join("_");
+        const qIdx = parseInt(parts[parts.length - 1], 10);
+        backupToRedis(chapterId, qIdx, value);
+      }
+    }
   }, [screen, chapterIdx, questionIdx, answers, history, covenant, consentGiven]);
 
   // ── AUTOSAVE: debounce inputText to localStorage draft ──
