@@ -125,10 +125,6 @@ Always end with a single, gentle, optional invitation to say more — never a de
 
 This man's words are a gift to ten grandchildren who will read them long after he is gone. Treat every answer accordingly.`;
 
-function generateSessionId() {
-  return "s_" + Math.random().toString(36).substring(2, 15);
-}
-
 // Derive resume position from saved answers — finds the first unanswered question
 function getResumePosition(savedAnswers) {
   for (let c = 0; c < CHAPTERS.length; c++) {
@@ -194,7 +190,7 @@ export default function LegacyApp() {
   const [covenant, setCovenant] = useState(() => localStorage.getItem("pappa_covenant") || "");
   const [buildingCovenant, setBuildingCovenant] = useState(false);
   const [consentGiven, setConsentGiven] = useState(() => localStorage.getItem("pappa_consent") === "true");
-  const [sessionId] = useState(generateSessionId);
+  const sessionId = getSessionId();
   const replyRef = useRef(null);
   const textareaRef = useRef(null);
   const draftTimerRef = useRef(null);
@@ -331,7 +327,7 @@ export default function LegacyApp() {
     localStorage.removeItem(draftKey);
     setLoading(true);
     setShowReply(false);
-    await collectData(chapter.id, questionIdx, question, ans.length);
+    collectData(chapter.id, questionIdx, question, ans.length); // fire-and-forget — don't delay AI response
     try {
       const msgs = [
         ...history,
@@ -944,7 +940,7 @@ export default function LegacyApp() {
 
         {/* After-reply nav */}
         {showReply && !loading && (
-          <div style={{ display: "flex", gap: 14 }}>
+          <div style={{ display: "flex", gap: 14, position: "relative" }}>
             <button
               onClick={() => { setShowReply(false); setAiReply(""); }}
               style={{
@@ -955,6 +951,7 @@ export default function LegacyApp() {
             >
               ← Add More
             </button>
+            <div style={{position:"absolute",top:-24,left:0,fontSize:13,color:"#6b8e6b",fontStyle:"italic"}}>Your answer is saved</div>
             <button
               onClick={goNext}
               style={{
